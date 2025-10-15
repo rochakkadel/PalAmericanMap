@@ -1,1 +1,516 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SF Site & Route Map</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- LeafletJS for the interactive map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+
+    <style>
+        /* Set a default height for the map container */
+        #map { 
+            height: 100vh; 
+        }
+        /* Custom scrollbar for better aesthetics in dark mode */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #2d3748; /* gray-800 */
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #718096; /* gray-500 */
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0; /* gray-400 */
+        }
+        /* Style for the numbered route markers */
+        .route-marker-icon {
+            background-color: #ffffff; /* white */
+            border: 2px solid #4a5568; /* gray-700 */
+            color: #2d3748; /* gray-800 */
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px; /* pill shape for variable width */
+            padding: 0 4px;
+        }
+        /* Use Courier New font */
+        body {
+            font-family: 'Courier New', Courier, monospace;
+        }
+        /* Animation for elements fading/popping in */
+        @keyframes pop-in {
+            0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-pop-in {
+            animation: pop-in 0.4s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="font-mono antialiased bg-gray-100 text-gray-800">
+
+    <!-- Access Code Prompt -->
+    <div id="access-prompt" class="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl text-center w-80">
+            <h2 class="text-2xl font-bold mb-4">Enter Access Code</h2>
+            <input type="password" id="access-code-input" class="border border-gray-300 rounded-md p-2 w-full mb-4 text-gray-800" placeholder="•••••">
+            <button id="access-submit-btn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 w-full transition-colors">Enter</button>
+            <p id="access-error" class="text-red-500 text-sm mt-2 h-4"></p>
+        </div>
+    </div>
+
+    <!-- Main Application Container (hidden by default) -->
+    <div id="app-container" class="hidden">
+        <div class="flex flex-col md:flex-row h-screen">
+            <!-- Sidebar for controls and information -->
+            <aside class="w-full md:w-1/3 lg:w-1/4 bg-gray-800 text-gray-200 shadow-lg overflow-y-auto custom-scrollbar">
+                <div class="p-5 border-b border-gray-700">
+                    <h1 class="text-2xl font-bold text-white">SF Map</h1>
+                    <p class="text-sm text-gray-400">Developed by Rochak Kadel</p>
+                </div>
+                
+                <!-- Manager Legend Section -->
+                <div id="manager-legend-container" class="p-5 border-b border-gray-700">
+                    <div id="manager-legend" class="flex flex-wrap gap-x-4 gap-y-2">
+                        <!-- Legend items will be injected here by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Relief Employee Section -->
+                <div id="relief-section" class="p-5">
+                    <h2 class="text-xl font-semibold text-gray-100 mb-3">Break Relief Routes</h2>
+                    <div id="relief-employee-list" class="space-y-2">
+                        <!-- Employee buttons will be injected here by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Selected Route Information Section -->
+                <div id="route-info-section" class="p-5 border-t border-gray-700 hidden">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 id="route-employee-name" class="text-lg font-semibold text-gray-100"></h3>
+                        <button id="clear-route-btn" class="text-sm text-blue-400 hover:underline transform active:scale-95 transition-transform duration-150">Show All Sites</button>
+                    </div>
+                    <div id="route-schedule" class="space-y-2">
+                        <!-- Schedule details will be injected here -->
+                    </div>
+                </div>
+                
+            </aside>
+
+            <!-- Map container -->
+            <main class="w-full md:w-2/3 lg:w-3/4">
+                <div id="map"></div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA STRUCTURES --- //
+        // This section contains all the site and employee data.
+        
+        const managerColors = {
+            "Doug Fletcher": "#1f77b4",
+            "Jason Daugherty": "#ff7f0e",
+            "Aldo Diaz": "#2ca02c",
+            "Mohamed Ezzat": "#d62728",
+            "Inderprit Gill": "#9467bd"
+        };
+
+        const sites = {
+            "Doug Fletcher": [
+                { name: "The Contemporary Jewish Museum", address: "736 Mission St", lat: 37.7857, lng: -122.4042 },
+                { name: "JLL - 600 California St", address: "600 California St", lat: 37.7925, lng: -122.4024 },
+                { name: "JLL - 120 Kearny St (PMC)", address: "120 Kearny St", lat: 37.7892, lng: -122.4040 }
+            ],
+            "Jason Daugherty": [
+                { name: "CBRE - 1128 Market St", address: "1128 Market St", lat: 37.7788, lng: -122.4132 },
+                { name: "The Potrero Power Station", address: "420 23rd St", lat: 37.7570, lng: -122.3850 },
+                { name: "Sutro Tower, Inc", address: "1 La Avanzada St", lat: 37.7552, lng: -122.4528 },
+                { name: "CBRE - 500 Howard St", address: "500 Howard St", lat: 37.7876, lng: -122.3958 },
+                { name: "CBRE - 500 Pine", address: "500 Pine St", lat: 37.7915, lng: -122.4029 },
+                { name: "AJ Capital Partners", address: "1800 Mission St", lat: 37.7675, lng: -122.4196 },
+                { name: "Dalum Corporation", address: "130 Battery St", lat: 37.7942, lng: -122.3992 },
+                { name: "Sequoias", address: "1400 Geary Blvd", lat: 37.7852, lng: -122.4300 },
+                { name: "JLL - 300 Kansas St", address: "300 Kansas St", lat: 37.7676, lng: -122.4045 },
+                { name: "Swig - 633 Folsom St", address: "633 Folsom St", lat: 37.7836, lng: -122.3973 },
+                { name: "Swig - 501 2nd St", address: "501 2nd St", lat: 37.7845, lng: -122.3912 },
+                { name: "Doublewood Investment", address: "111 Pine St", lat: 37.7932, lng: -122.4000 },
+                { name: "Novva", address: "400 Paul Ave", lat: 37.7228, lng: -122.4209 },
+                { name: "633 Folsom", address: "633 Folsom St", lat: 37.7836, lng: -122.3973 },
+                { name: "1 Kearny", address: "1 Kearny St", lat: 37.7877, lng: -122.4043 },
+                { name: "1200 Van Ness", address: "1200 Van Ness Ave", lat: 37.7865, lng: -122.4217 }
+            ],
+            "Aldo Diaz": [
+                { name: "181 Fremont Street", address: "181 Fremont St", lat: 37.7895, lng: -122.3950 },
+                { name: "Harvest - 274 Brannan St", address: "274 Brannan St", lat: 37.7820, lng: -122.3908 },
+                { name: "Harvest - 360 Spear St", address: "360 Spear St", lat: 37.7861, lng: -122.3908 },
+                { name: "Tavaco - 1035 Market St", address: "1035 Market St", lat: 37.7806, lng: -122.4105 },
+                { name: "JLL - 150 Spear St", address: "150 Spear St", lat: 37.7909, lng: -122.3941 },
+                { name: "RREG - 750 Battery Corp.", address: "750 Battery St", lat: 37.7984, lng: -122.4011 },
+                { name: "Tusker Corporation", address: "1635 Divisadero St", lat: 37.7844, lng: -122.4400 },
+                { name: "Van Barton - 115 Sansome", address: "115 Sansome St", lat: 37.7920, lng: -122.4010 },
+                { name: "CBRE - 180 Montgomery", address: "180 Montgomery St", lat: 37.7895, lng: -122.4030 },
+                { name: "Swig - 220 Montgomery St", address: "220 Montgomery St", lat: 37.7901, lng: -122.4027 },
+                { name: "ECP - 601 California St", address: "601 California St", lat: 37.7925, lng: -122.4032 },
+                { name: "EPA - 711 Eddy St", address: "711 Eddy St", lat: 37.7828, lng: -122.4208 },
+                { name: "WPA - 1280 Laguna", address: "1280 Laguna St", lat: 37.7849, lng: -122.4293 },
+                { name: "CW - 71 Stevenson St", address: "71 Stevenson St", lat: 37.7885, lng: -122.3995 }
+            ],
+            "Mohamed Ezzat": [
+                { name: "Colliers - 153 Kearny St", address: "153 Kearny St", lat: 37.7896, lng: -122.4042 },
+                { name: "JLL - 110 Sutter", address: "110 Sutter St", lat: 37.7903, lng: -122.4037 },
+                { name: "Colliers - 240 Stockton St", address: "240 Stockton St", lat: 37.7881, lng: -122.4069 },
+                { name: "Colliers - 26 O'Farrell St", address: "26 O'Farrell St", lat: 37.7871, lng: -122.4065 },
+                { name: "G&G Partners", address: "30 Grant Ave", lat: 37.7877, lng: -122.4055 },
+                { name: "YCS Investments", address: "170 Maiden Lane", lat: 37.7885, lng: -122.4053 },
+                { name: "Olympic Club Lakeside", address: "599 Skyline Blvd", lat: 37.7214, lng: -122.4960 },
+                { name: "CW - 456 Montgomery St", address: "456 Montgomery St", lat: 37.7927, lng: -122.4031 },
+                { name: "Colliers - 717 Market St", address: "717 Market St", lat: 37.7869, lng: -122.4039 },
+                { name: "JLL - 201 Mission St", address: "201 Mission St", lat: 37.7915, lng: -122.3947 },
+                { name: "Van Barton - 101 Mission", address: "101 Mission St", lat: 37.7927, lng: -122.3951 },
+                { name: "Van Barton - 100 Montgomery", address: "100 Montgomery St", lat: 37.7890, lng: -122.4032 },
+                { name: "Colliers - 166 Geary", address: "166 Geary St", lat: 37.7883, lng: -122.4061 }
+            ],
+            "Inderprit Gill": [
+                { name: "Seligman - 311 California St", address: "311 California St", lat: 37.7931, lng: -122.4005 },
+                { name: "JKL Corporation", address: "90 New Montgomery St", lat: 37.7869, lng: -122.4009 },
+                { name: "Seligman - 785 Market St", address: "785 Market St", lat: 37.7860, lng: -122.4047 },
+                { name: "Metrovation", address: "230 California St", lat: 37.7937, lng: -122.3991 },
+                { name: "JLL - 101 Montgomery St", address: "101 Montgomery St", lat: 37.7890, lng: -122.4032 },
+                { name: "JLL - 425 California St", address: "425 California St", lat: 37.7935, lng: -122.4019 },
+                { name: "Transwestern - 210 Post St", address: "210 Post St", lat: 37.7887, lng: -122.4063 },
+                { name: "Seaker & Sons", address: "30 Maiden Lane", lat: 37.7880, lng: -122.4057 },
+                { name: "Flynn Properties", address: "222 Kearny St", lat: 37.7903, lng: -122.4043 },
+                { name: "TMG LLC - 150 Post St", address: "150 Post St", lat: 37.7891, lng: -122.4054 },
+                { name: "Transwestern - 1019 Market St", address: "1019 Market St", lat: 37.7812, lng: -122.4100 },
+                { name: "CW - 425 Market St", address: "425 Market St", lat: 37.7920, lng: -122.3971 }
+            ]
+        };
+        
+        const yolandaAndApithanySchedule = [
+            { locationName: "101 Montgomery St", startTime: "9:00", endTime: "9:15" },
+            { locationName: "425 California St", startTime: "9:25", endTime: "9:40" },
+            { locationName: "153 Kearny St", startTime: "9:50", endTime: "10:05" },
+            { locationName: "Break", startTime: "10:05", endTime: "10:20", isBreak: true },
+            { locationName: "101 Montgomery St", startTime: "10:45", endTime: "11:15" },
+            { locationName: "425 California St", startTime: "11:25", endTime: "11:55" },
+            { locationName: "153 Kearny St", startTime: "12:05", endTime: "12:35" },
+            { locationName: "150 Post St", startTime: "12:40", endTime: "13:40" },
+            { locationName: "Lunch", startTime: "13:45", endTime: "14:15", isBreak: true },
+            { locationName: "101 Montgomery St", startTime: "14:15", endTime: "14:30" },
+            { locationName: "425 California St", startTime: "14:40", endTime: "14:55" },
+            { locationName: "153 Kearny St", startTime: "15:05", endTime: "15:20" }
+        ];
+        
+        const breakReliefs = {
+            "Yolanda Perez": {
+                schedule: [
+                    { locationName: "90 New Montgomery St", startTime: "8:30", endTime: "8:45" },
+                    { locationName: "71 Stevenson St", startTime: "8:50", endTime: "9:05" },
+                    { locationName: "30 Grant Ave", startTime: "9:15", endTime: "9:30" },
+                    { locationName: "Break", startTime: "9:30", endTime: "10:00", isBreak: true },
+                    { locationName: "1019 Market St", startTime: "10:00", endTime: "10:15" },
+                    { locationName: "90 New Montgomery St", startTime: "10:45", endTime: "11:00" },
+                    { locationName: "30 Grant Ave", startTime: "11:15", endTime: "11:45" },
+                    { locationName: "71 Stevenson St", startTime: "12:00", endTime: "12:15" },
+                    { locationName: "1019 Market St", startTime: "12:45", endTime: "13:00" },
+                    { locationName: "30 Grant Ave", startTime: "13:15", endTime: "13:30" }
+                ]
+            },
+            "Apithany Hayes": { schedule: yolandaAndApithanySchedule },
+            "Imran Anwar": {
+                schedule: [
+                    { locationName: "210 Post St", startTime: "9:00", endTime: "9:15" },
+                    { locationName: "30 Maiden Lane", startTime: "9:30", endTime: "9:45" },
+                    { locationName: "Break", startTime: "9:45", endTime: "10:15", isBreak: true },
+                    { locationName: "210 Post St", startTime: "10:15", endTime: "10:45" },
+                    { locationName: "111 Pine St", startTime: "11:00", endTime: "11:30" },
+                    { locationName: "30 Maiden Lane", startTime: "11:45", endTime: "12:15" },
+                    { locationName: "210 Post St", startTime: "12:30", endTime: "12:45" },
+                    { locationName: "30 Maiden Lane", startTime: "13:00", endTime: "13:15" }
+                ]
+            },
+            "Eli Walin": {
+                schedule: [
+                    { locationName: "750 Battery St", startTime: "9:00", endTime: "9:15" },
+                    { locationName: "222 Kearny St", startTime: "9:35", endTime: "9:50" },
+                    { locationName: "Break", startTime: "9:50", endTime: "10:45", isBreak: true },
+                    { locationName: "750 Battery St", startTime: "10:45", endTime: "11:15" },
+                    { locationName: "222 Kearny St", startTime: "11:45", endTime: "12:15" },
+                    { locationName: "750 Battery St", startTime: "12:35", endTime: "12:50" },
+                    { locationName: "222 Kearny St", startTime: "13:15", endTime: "13:30" },
+                    { locationName: "230 California St", startTime: "15:00", endTime: "19:00" }
+                ]
+            },
+            "Melaysia Horn": {
+                schedule: [
+                    { locationName: "110 Sutter St", startTime: "8:30", endTime: "8:45" },
+                    { locationName: "101 Mission St", startTime: "9:00", endTime: "9:15" },
+                    { locationName: "26 O'Farrell St", startTime: "9:45", endTime: "10:00" },
+                    { locationName: "Break", startTime: "10:00", endTime: "10:30", isBreak: true },
+                    { locationName: "101 Mission St", startTime: "10:30", endTime: "11:00" },
+                    { locationName: "110 Sutter St", startTime: "11:15", endTime: "11:45" },
+                    { locationName: "26 O'Farrell St", startTime: "12:00", endTime: "12:30" },
+                    { locationName: "Lunch", startTime: "12:30", endTime: "13:00", isBreak: true },
+                    { locationName: "110 Sutter St", startTime: "13:00", endTime: "13:15" },
+                    { locationName: "101 Mission St", startTime: "13:30", endTime: "13:45" },
+                    { locationName: "26 O'Farrell St", startTime: "14:15", endTime: "14:30" }
+                ]
+            },
+            "Adham Shaef": {
+                schedule: [
+                    { locationName: "115 Sansome St", startTime: "7:00", endTime: "7:15" },
+                    { locationName: "240 Stockton St", startTime: "7:30", endTime: "7:45" },
+                    { locationName: "717 Market St", startTime: "8:00", endTime: "8:15" },
+                    { locationName: "500 Pine St", startTime: "8:30", endTime: "8:45" },
+                    { locationName: "Lunch", startTime: "8:45", endTime: "9:15", isBreak: true },
+                    { locationName: "115 Sansome St", startTime: "9:15", endTime: "9:45" },
+                    { locationName: "240 Stockton St", startTime: "10:00", endTime: "10:30" },
+                    { locationName: "717 Market St", startTime: "10:40", endTime: "11:10" },
+                    { locationName: "500 Pine St", startTime: "11:25", endTime: "11:55" },
+                    { locationName: "Break", startTime: "11:55", endTime: "12:25", isBreak: true },
+                    { locationName: "115 Sansome St", startTime: "12:25", endTime: "12:40" },
+                    { locationName: "240 Stockton St", startTime: "12:55", endTime: "13:10" },
+                    { locationName: "500 Pine St", startTime: "13:20", endTime: "13:35" },
+                    { locationName: "717 Market St", startTime: "13:45", endTime: "14:00" }
+                ]
+            }
+        };
+
+        // --- MAP INITIALIZATION & LOGIC --- //
+        let mapInitialized = false;
+
+        function initializeMapApplication() {
+            if (mapInitialized) return;
+
+            const map = L.map('map').setView([37.7749, -122.4194], 13);
+            
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 20
+            }).addTo(map);
+
+            const allSitesLayer = L.layerGroup().addTo(map);
+            const routeLayer = L.layerGroup().addTo(map);
+
+            const allSitesList = Object.values(sites).flat();
+
+            function findSiteByAddress(address) {
+                const normalizedSearch = address.toLowerCase().trim();
+                return allSitesList.find(site => site.address.toLowerCase().trim() === normalizedSearch);
+            }
+            
+            function createColoredIcon(color) {
+                const iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="32px" height="32px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>`;
+                return L.divIcon({ html: iconHtml, className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
+            }
+            
+            function displayAllSites() {
+                allSitesLayer.clearLayers();
+                Object.entries(sites).forEach(([manager, locations]) => {
+                    const color = managerColors[manager] || '#3388ff';
+                    const icon = createColoredIcon(color);
+                    locations.forEach(site => {
+                        const marker = L.marker([site.lat, site.lng], { icon: icon }).addTo(allSitesLayer);
+                        marker.bindPopup(`<b>${site.name}</b><br>${site.address}<br><small>Manager: ${manager}</small>`);
+                    });
+                });
+            }
+
+            function displayRoute(employeeName) {
+                routeLayer.clearLayers();
+                allSitesLayer.clearLayers();
+
+                const relief = breakReliefs[employeeName];
+                if (!relief) return;
+
+                const routePoints = [];
+                const aggregatedStops = {};
+                let stopCounter = 1;
+
+                const scheduleContainer = document.getElementById('route-schedule');
+                scheduleContainer.innerHTML = '';
+                
+                relief.schedule.forEach(item => {
+                    const scheduleItemDiv = document.createElement('div');
+                    
+                    if (item.isBreak) {
+                        scheduleItemDiv.className = 'p-3 rounded-lg bg-yellow-900/50 border border-yellow-800';
+                        scheduleItemDiv.innerHTML = `
+                            <div class="font-semibold text-yellow-300">${employeeName}'s ${item.locationName}</div>
+                            <div class="text-sm text-yellow-400">${item.startTime} - ${item.endTime}</div>
+                        `;
+                    } else {
+                        scheduleItemDiv.className = 'p-3 rounded-lg bg-gray-700 border border-gray-600';
+                        const site = findSiteByAddress(item.locationName);
+                        if (site) {
+                            scheduleItemDiv.innerHTML = `
+                                <div class="font-semibold text-white">${stopCounter}. ${site.name}</div>
+                                <div class="text-sm text-gray-400">${item.startTime} - ${item.endTime}</div>
+                                <div class="text-xs text-gray-500">${site.address}</div>
+                            `;
+                            routePoints.push([site.lat, site.lng]);
+                            
+                            const key = `${site.lat},${site.lng}`;
+                            if (!aggregatedStops[key]) {
+                                aggregatedStops[key] = {
+                                    lat: site.lat,
+                                    lng: site.lng,
+                                    name: site.name,
+                                    stopNums: []
+                                };
+                            }
+                            aggregatedStops[key].stopNums.push(stopCounter);
+                        } else {
+                             scheduleItemDiv.innerHTML = `
+                                <div class="font-semibold text-red-400">${stopCounter}. Location not found</div>
+                                <div class="text-sm text-red-500">${item.locationName}</div>
+                            `;
+                        }
+                        // Increment counter for every non-break stop, regardless of whether it was found
+                        stopCounter++;
+                    }
+                    scheduleContainer.appendChild(scheduleItemDiv);
+                });
+                
+                if (routePoints.length > 0) {
+                    L.polyline(routePoints, { color: 'rgba(59, 130, 246, 0.8)', weight: 5 }).addTo(routeLayer);
+                }
+
+                Object.values(aggregatedStops).forEach(stop => {
+                    const stopNumbersText = stop.stopNums.join(',');
+                    const iconWidth = 10 * stopNumbersText.length + 18; // Dynamically calculate width
+
+                    const numberIcon = L.divIcon({ 
+                        className: 'route-marker-icon', 
+                        html: `<span>${stopNumbersText}</span>`, 
+                        iconSize: [iconWidth, 28], 
+                        iconAnchor: [iconWidth / 2, 14] 
+                    });
+                    L.marker([stop.lat, stop.lng], { icon: numberIcon })
+                        .bindPopup(`<b>Stops ${stopNumbersText}: ${stop.name}</b>`)
+                        .addTo(routeLayer);
+                });
+                
+                if (routePoints.length > 0) {
+                    map.fitBounds(routePoints, { padding: [50, 50] });
+                }
+
+                document.getElementById('route-employee-name').textContent = `${employeeName}'s Route`;
+                // Animate the sections
+                const routeInfoSection = document.getElementById('route-info-section');
+                routeInfoSection.classList.remove('hidden');
+                routeInfoSection.classList.add('animate-pop-in');
+
+                document.getElementById('relief-section').classList.add('hidden');
+                document.getElementById('manager-legend-container').classList.add('hidden');
+            }
+            
+            // Populate Manager Legend
+            const legendContainer = document.getElementById('manager-legend');
+            Object.keys(managerColors).sort().forEach(name => {
+                const color = managerColors[name];
+                const legendItem = document.createElement('div');
+                legendItem.className = 'flex items-center space-x-2';
+                
+                const dot = document.createElement('div');
+                dot.className = 'w-3 h-3 rounded-full flex-shrink-0';
+                dot.style.backgroundColor = color;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'text-xs text-gray-300';
+                nameSpan.textContent = name;
+                
+                legendItem.appendChild(dot);
+                legendItem.appendChild(nameSpan);
+                legendContainer.appendChild(legendItem);
+            });
+
+            // Populate relief employee list
+            const employeeListContainer = document.getElementById('relief-employee-list');
+            Object.keys(breakReliefs).forEach(name => {
+                const button = document.createElement('button');
+                button.textContent = name;
+                button.className = 'w-full text-left p-3 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-150 transform active:scale-95';
+                button.onclick = () => displayRoute(name);
+                employeeListContainer.appendChild(button);
+            });
+
+            document.getElementById('clear-route-btn').addEventListener('click', () => {
+                routeLayer.clearLayers();
+                displayAllSites();
+                map.setView([37.7749, -122.4194], 13);
+                
+                const routeInfoSection = document.getElementById('route-info-section');
+                routeInfoSection.classList.add('hidden');
+                routeInfoSection.classList.remove('animate-pop-in');
+                
+                const reliefSection = document.getElementById('relief-section');
+                reliefSection.classList.remove('hidden');
+                reliefSection.classList.add('animate-pop-in');
+
+                const managerLegendContainer = document.getElementById('manager-legend-container');
+                managerLegendContainer.classList.remove('hidden');
+                managerLegendContainer.classList.add('animate-pop-in');
+            });
+            
+            // Initial animation for the sidebar sections
+            document.getElementById('manager-legend-container').classList.add('animate-pop-in');
+            document.getElementById('relief-section').classList.add('animate-pop-in');
+            displayAllSites();
+
+            mapInitialized = true;
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // --- Access Code Logic --- //
+            const correctAccessCode = '91965';
+            const accessPrompt = document.getElementById('access-prompt');
+            const appContainer = document.getElementById('app-container');
+            const accessInput = document.getElementById('access-code-input');
+            const accessSubmit = document.getElementById('access-submit-btn');
+            const accessError = document.getElementById('access-error');
+
+            function checkAccessCode() {
+                if (accessInput.value === correctAccessCode) {
+                    accessPrompt.style.display = 'none';
+                    appContainer.classList.remove('hidden');
+                    initializeMapApplication(); // Initialize the map after the container is visible
+                } else {
+                    accessError.textContent = 'Invalid access code.';
+                    accessInput.classList.add('border-red-500'); // Highlight error
+                    setTimeout(() => {
+                        accessError.textContent = '';
+                        accessInput.classList.remove('border-red-500');
+                    }, 2000);
+                    accessInput.value = '';
+                }
+            }
+
+            accessSubmit.addEventListener('click', checkAccessCode);
+            accessInput.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') {
+                    checkAccessCode();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,117 +17,143 @@
         crossorigin=""></script>
 
     <style>
-        /* Set a default height for the map container */
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+        }
         #map { 
             height: 100vh; 
         }
-        /* Custom scrollbar for better aesthetics in dark mode */
+        /* Custom scrollbar */
         .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-            background: #2d3748; /* gray-800 */
+            background: #111827; /* gray-900 */
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #718096; /* gray-500 */
-            border-radius: 4px;
+            background: #4b5563; /* gray-600 */
+            border-radius: 3px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #a0aec0; /* gray-400 */
+            background: #6b7280; /* gray-500 */
         }
-        /* Style for the numbered route markers */
+        /* Numbered route markers */
         .route-marker-icon {
-            background-color: #ffffff; /* white */
-            border: 2px solid #4a5568; /* gray-700 */
-            color: #2d3748; /* gray-800 */
+            background-color: #ffffff;
+            border: 2px solid #111827; /* gray-900 */
+            color: #111827;
             font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 14px; /* pill shape for variable width */
-            padding: 0 4px;
+            border-radius: 9999px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* Use Courier New font */
-        body {
-            font-family: 'Courier New', Courier, monospace;
+        
+        /* UI Panel transitions */
+        .view-panel {
+            transition: opacity 0.3s ease-out, transform 0.3s ease-out;
         }
-        /* Animation for elements fading/popping in */
-        @keyframes pop-in {
-            0% { opacity: 0; transform: translateY(10px) scale(0.98); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
+        .view-panel.hidden {
+            opacity: 0;
+            transform: translateY(20px);
+            pointer-events: none;
+            position: absolute;
+            width: calc(100% - 3rem); /* p-6 is 1.5rem on each side */
         }
-        .animate-pop-in {
-            animation: pop-in 0.4s ease-out forwards;
+
+        /* Staggered list animation */
+        @keyframes slide-in-up {
+            from {
+                opacity: 0;
+                transform: translateY(15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-slide-in-up {
+            animation: slide-in-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            opacity: 0;
         }
     </style>
 </head>
-<body class="font-mono antialiased bg-gray-100 text-gray-800">
+<body class="antialiased bg-gray-100 text-gray-800">
 
-    <!-- Access Code Prompt -->
-    <div id="access-prompt" class="fixed inset-0 bg-gray-900 bg-opacity-80 flex items-center justify-center z-50">
-        <div class="bg-white p-8 rounded-lg shadow-xl text-center w-80">
-            <h2 class="text-2xl font-bold mb-4">Enter Access Code</h2>
-            <input type="password" id="access-code-input" class="border border-gray-300 rounded-md p-2 w-full mb-4 text-gray-800" placeholder="•••••">
-            <button id="access-submit-btn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 w-full transition-colors">Enter</button>
-            <p id="access-error" class="text-red-500 text-sm mt-2 h-4"></p>
-        </div>
-    </div>
-
-    <!-- Main Application Container (hidden by default) -->
-    <div id="app-container" class="hidden">
+    <div id="app-container">
         <div class="flex flex-col md:flex-row h-screen">
-            <!-- Sidebar for controls and information -->
-            <aside class="w-full md:w-1/3 lg:w-1/4 bg-gray-800 text-gray-200 shadow-lg overflow-y-auto custom-scrollbar">
-                <div class="p-5 border-b border-gray-700">
-                    <h1 class="text-2xl font-bold text-white">SF Map</h1>
+            <!-- Sidebar -->
+            <aside class="w-full md:w-1/3 lg:w-1/4 bg-gray-900 text-gray-300 shadow-2xl flex flex-col">
+                <div class="p-6 border-b border-gray-700/50">
+                    <h1 class="text-2xl text-white tracking-wider">SF Map</h1>
                     <p class="text-sm text-gray-400">Developed by Rochak Kadel</p>
                 </div>
                 
-                <!-- Manager Legend Section -->
-                <div id="manager-legend-container" class="p-5 border-b border-gray-700">
-                    <div id="manager-legend" class="flex flex-wrap gap-x-4 gap-y-2">
-                        <!-- Legend items will be injected here by JavaScript -->
+                <div class="flex-grow p-6 overflow-y-auto custom-scrollbar relative">
+                    <!-- View for initial button -->
+                    <div id="initial-view" class="view-panel">
+                        <button id="show-relief-routes-btn" class="w-full text-center p-4 bg-white text-gray-900 rounded-lg shadow-md hover:bg-gray-200 focus:outline-none focus:ring-2 ring-offset-2 ring-offset-gray-900 focus:ring-gray-400 transition-all duration-200 transform hover:scale-105 active:scale-100">
+                            Break Reliefs routes
+                        </button>
                     </div>
-                </div>
 
-                <!-- Relief Employee Section -->
-                <div id="relief-section" class="p-5">
-                    <h2 class="text-xl font-semibold text-gray-100 mb-3">Break Relief Routes</h2>
-                    <div id="relief-employee-list" class="space-y-2">
-                        <!-- Employee buttons will be injected here by JavaScript -->
+                    <!-- View for relief employee list -->
+                    <div id="relief-list-view" class="view-panel hidden">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-xl text-white">Relief Staff</h2>
+                            <button id="back-to-initial-btn" class="text-sm text-blue-400 hover:text-blue-300 transition">Back</button>
+                        </div>
+                        <div id="relief-employee-list" class="space-y-3">
+                            <!-- Employee buttons will be injected here -->
+                        </div>
                     </div>
-                </div>
 
-                <!-- Selected Route Information Section -->
-                <div id="route-info-section" class="p-5 border-t border-gray-700 hidden">
-                    <div class="flex items-center justify-between mb-3">
-                        <h3 id="route-employee-name" class="text-lg font-semibold text-gray-100"></h3>
-                        <button id="clear-route-btn" class="text-sm text-blue-400 hover:underline transform active:scale-95 transition-transform duration-150">Show All Sites</button>
-                    </div>
-                    <div id="route-schedule" class="space-y-2">
-                        <!-- Schedule details will be injected here -->
+                    <!-- Selected Route Information Section -->
+                    <div id="route-info-section" class="view-panel hidden">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 id="route-employee-name" class="text-xl text-white"></h3>
+                            <button id="back-to-relief-list-btn" class="text-sm text-blue-400 hover:text-blue-300 transition">Back</button>
+                        </div>
+                        <div id="route-schedule" class="space-y-3">
+                            <!-- Schedule details will be injected here -->
+                        </div>
                     </div>
                 </div>
-                
             </aside>
 
             <!-- Map container -->
-            <main class="w-full md:w-2/3 lg:w-3/4">
+            <main class="w-full md:w-2/3 lg:w-3/4 relative">
                 <div id="map"></div>
+                <!-- Legends Container -->
+                <div id="legends-container" class="absolute top-4 right-4 space-y-3 z-[1000]">
+                     <!-- Manager Legend -->
+                    <div id="manager-legend-container" class="bg-gray-900/70 backdrop-blur-sm text-gray-200 p-4 rounded-lg shadow-lg transition-opacity duration-300 border border-gray-700/50">
+                        <div id="manager-legend" class="space-y-2">
+                            <!-- Legend items will be injected here by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Relief Site Legend -->
+                    <div id="relief-legend-container" class="bg-gray-900/70 backdrop-blur-sm text-gray-200 p-4 rounded-lg shadow-lg transition-opacity duration-300 hidden max-h-[70vh] overflow-y-auto custom-scrollbar border border-gray-700/50">
+                        <div id="relief-legend-list" class="space-y-2">
+                            <!-- Relief site legend items will be injected here -->
+                        </div>
+                    </div>
+                </div>
             </main>
         </div>
     </div>
 
     <script>
         // --- DATA STRUCTURES --- //
-        // This section contains all the site and employee data.
-        
         const managerColors = {
-            "Doug Fletcher": "#1f77b4",
-            "Jason Daugherty": "#ff7f0e",
-            "Aldo Diaz": "#2ca02c",
-            "Mohamed Ezzat": "#d62728",
-            "Inderprit Gill": "#9467bd"
+            "Doug Fletcher": "#3b82f6", // Blue
+            "Jason Daugherty": "#f97316", // Orange
+            "Aldo Diaz": "#22c55e", // Green
+            "Mohamed Ezzat": "#ef4444", // Red
+            "Inderprit Gill": "#8b5cf6"  // Violet
         };
 
         const sites = {
@@ -202,21 +227,6 @@
             ]
         };
         
-        const yolandaAndApithanySchedule = [
-            { locationName: "101 Montgomery St", startTime: "9:00", endTime: "9:15" },
-            { locationName: "425 California St", startTime: "9:25", endTime: "9:40" },
-            { locationName: "153 Kearny St", startTime: "9:50", endTime: "10:05" },
-            { locationName: "Break", startTime: "10:05", endTime: "10:20", isBreak: true },
-            { locationName: "101 Montgomery St", startTime: "10:45", endTime: "11:15" },
-            { locationName: "425 California St", startTime: "11:25", endTime: "11:55" },
-            { locationName: "153 Kearny St", startTime: "12:05", endTime: "12:35" },
-            { locationName: "150 Post St", startTime: "12:40", endTime: "13:40" },
-            { locationName: "Lunch", startTime: "13:45", endTime: "14:15", isBreak: true },
-            { locationName: "101 Montgomery St", startTime: "14:15", endTime: "14:30" },
-            { locationName: "425 California St", startTime: "14:40", endTime: "14:55" },
-            { locationName: "153 Kearny St", startTime: "15:05", endTime: "15:20" }
-        ];
-        
         const breakReliefs = {
             "Yolanda Perez": {
                 schedule: [
@@ -232,7 +242,22 @@
                     { locationName: "30 Grant Ave", startTime: "13:15", endTime: "13:30" }
                 ]
             },
-            "Apithany Hayes": { schedule: yolandaAndApithanySchedule },
+             "Apithany Hayes": { 
+                schedule: [
+                    { locationName: "101 Montgomery St", startTime: "9:00", endTime: "9:15" },
+                    { locationName: "425 California St", startTime: "9:25", endTime: "9:40" },
+                    { locationName: "153 Kearny St", startTime: "9:50", endTime: "10:05" },
+                    { locationName: "Break", startTime: "10:05", endTime: "10:20", isBreak: true },
+                    { locationName: "101 Montgomery St", startTime: "10:45", endTime: "11:15" },
+                    { locationName: "425 California St", startTime: "11:25", endTime: "11:55" },
+                    { locationName: "153 Kearny St", startTime: "12:05", endTime: "12:35" },
+                    { locationName: "150 Post St", startTime: "12:40", endTime: "13:40" },
+                    { locationName: "Lunch", startTime: "13:45", endTime: "14:15", isBreak: true },
+                    { locationName: "101 Montgomery St", startTime: "14:15", endTime: "14:30" },
+                    { locationName: "425 California St", startTime: "14:40", endTime: "14:55" },
+                    { locationName: "153 Kearny St", startTime: "15:05", endTime: "15:20" }
+                ]
+            },
             "Imran Anwar": {
                 schedule: [
                     { locationName: "210 Post St", startTime: "9:00", endTime: "9:15" },
@@ -259,34 +284,34 @@
             },
             "Melaysia Horn": {
                 schedule: [
-                    { locationName: "110 Sutter St", startTime: "8:30", endTime: "8:45" },
-                    { locationName: "101 Mission St", startTime: "9:00", endTime: "9:15" },
-                    { locationName: "26 O'Farrell St", startTime: "9:45", endTime: "10:00" },
-                    { locationName: "Break", startTime: "10:00", endTime: "10:30", isBreak: true },
-                    { locationName: "101 Mission St", startTime: "10:30", endTime: "11:00" },
-                    { locationName: "110 Sutter St", startTime: "11:15", endTime: "11:45" },
-                    { locationName: "26 O'Farrell St", startTime: "12:00", endTime: "12:30" },
-                    { locationName: "Lunch", startTime: "12:30", endTime: "13:00", isBreak: true },
-                    { locationName: "110 Sutter St", startTime: "13:00", endTime: "13:15" },
-                    { locationName: "101 Mission St", startTime: "13:30", endTime: "13:45" },
-                    { locationName: "26 O'Farrell St", startTime: "14:15", endTime: "14:30" }
+                    { locationName: "101 Mission", startTime: "8:30", endTime: "8:45" },
+                    { locationName: "110 Sutter", startTime: "9:00", endTime: "9:15" },
+                    { locationName: "26 O'Farrell St", startTime: "9:25", endTime: "9:40" },
+                    { locationName: "101 Mission", startTime: "10:30", endTime: "11:00" },
+                    { locationName: "110 Sutter", startTime: "11:15", endTime: "11:45" },
+                    { locationName: "26 O'Farrell St", startTime: "11:55", endTime: "12:25" },
+                    { locationName: "Lunch", startTime: "12:25", endTime: "13:00", isBreak: true },
+                    { locationName: "101 Mission", startTime: "13:00", endTime: "13:15" },
+                    { locationName: "110 Sutter", startTime: "13:30", endTime: "13:45" },
+                    { locationName: "1 Kearny", startTime: "13:55", endTime: "14:25" },
+                    { locationName: "26 O'Farrell St", startTime: "14:30", endTime: "14:45" }
                 ]
             },
             "Adham Shaef": {
                 schedule: [
-                    { locationName: "115 Sansome St", startTime: "7:00", endTime: "7:15" },
+                    { locationName: "115 Sansome", startTime: "7:00", endTime: "7:15" },
                     { locationName: "240 Stockton St", startTime: "7:30", endTime: "7:45" },
                     { locationName: "717 Market St", startTime: "8:00", endTime: "8:15" },
-                    { locationName: "500 Pine St", startTime: "8:30", endTime: "8:45" },
+                    { locationName: "500 Pine", startTime: "8:30", endTime: "8:45" },
                     { locationName: "Lunch", startTime: "8:45", endTime: "9:15", isBreak: true },
-                    { locationName: "115 Sansome St", startTime: "9:15", endTime: "9:45" },
+                    { locationName: "115 Sansome", startTime: "9:15", endTime: "9:45" },
                     { locationName: "240 Stockton St", startTime: "10:00", endTime: "10:30" },
                     { locationName: "717 Market St", startTime: "10:40", endTime: "11:10" },
-                    { locationName: "500 Pine St", startTime: "11:25", endTime: "11:55" },
+                    { locationName: "500 Pine", startTime: "11:25", endTime: "11:55" },
                     { locationName: "Break", startTime: "11:55", endTime: "12:25", isBreak: true },
-                    { locationName: "115 Sansome St", startTime: "12:25", endTime: "12:40" },
+                    { locationName: "115 Sansome", startTime: "12:25", endTime: "12:40" },
                     { locationName: "240 Stockton St", startTime: "12:55", endTime: "13:10" },
-                    { locationName: "500 Pine St", startTime: "13:20", endTime: "13:35" },
+                    { locationName: "500 Pine", startTime: "13:20", endTime: "13:35" },
                     { locationName: "717 Market St", startTime: "13:45", endTime: "14:00" }
                 ]
             }
@@ -294,6 +319,15 @@
 
         // --- MAP INITIALIZATION & LOGIC --- //
         let mapInitialized = false;
+
+        const relieverColors = {
+            "Adham Shaef": "#8e44ad",   // Purple
+            "Apithany Hayes": "#27ae60", // Green
+            "Eli Walin": "#2980b9",     // Blue
+            "Imran Anwar": "#f39c12",   // Orange
+            "Melaysia Horn": "#c0392b", // Red
+            "Yolanda Perez": "#00bcd4"  // Cyan
+        };
 
         function initializeMapApplication() {
             if (mapInitialized) return;
@@ -309,20 +343,32 @@
             const allSitesLayer = L.layerGroup().addTo(map);
             const routeLayer = L.layerGroup().addTo(map);
 
+            const managerLegend = document.getElementById('manager-legend-container');
+            const reliefLegend = document.getElementById('relief-legend-container');
+
             const allSitesList = Object.values(sites).flat();
 
             function findSiteByAddress(address) {
                 const normalizedSearch = address.toLowerCase().trim();
-                return allSitesList.find(site => site.address.toLowerCase().trim() === normalizedSearch);
+                let foundSite = allSitesList.find(site => site.address.toLowerCase().trim().startsWith(normalizedSearch));
+                if (!foundSite) {
+                    foundSite = allSitesList.find(site => site.name.toLowerCase().includes(normalizedSearch));
+                }
+                return foundSite;
             }
             
-            function createColoredIcon(color) {
-                const iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="32px" height="32px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>`;
-                return L.divIcon({ html: iconHtml, className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32] });
+            function createColoredIcon(color, options = {}) {
+                const { opacity = 1.0, scale = 1.0 } = options;
+                const size = 32 * scale;
+                const iconHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="${size}px" height="${size}px" style="opacity: ${opacity}; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3));"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>`;
+                return L.divIcon({ html: iconHtml, className: '', iconSize: [size, size], iconAnchor: [size / 2, size], popupAnchor: [0, -size] });
             }
             
             function displayAllSites() {
                 allSitesLayer.clearLayers();
+                routeLayer.clearLayers();
+                managerLegend.style.opacity = 1;
+                reliefLegend.classList.add('hidden');
                 Object.entries(sites).forEach(([manager, locations]) => {
                     const color = managerColors[manager] || '#3388ff';
                     const icon = createColoredIcon(color);
@@ -333,11 +379,66 @@
                 });
             }
 
+            function displayOnlyReliefSites() {
+                routeLayer.clearLayers();
+                allSitesLayer.clearLayers();
+                managerLegend.style.opacity = 0;
+                reliefLegend.classList.remove('hidden');
+
+                const reliefLegendList = document.getElementById('relief-legend-list');
+                reliefLegendList.innerHTML = '';
+                Object.keys(relieverColors).sort().forEach(relieverName => {
+                    const color = relieverColors[relieverName];
+                    const legendItem = document.createElement('div');
+                    legendItem.className = 'flex items-center space-x-3 animate-slide-in-up';
+                    legendItem.style.animationDelay = `${Object.keys(relieverColors).sort().indexOf(relieverName) * 50}ms`;
+                    legendItem.innerHTML = `
+                        <div class="w-4 h-4 rounded-full flex-shrink-0" style="background-color: ${color};"></div>
+                        <span class="text-sm text-gray-200">${relieverName}</span>
+                    `;
+                    reliefLegendList.appendChild(legendItem);
+                });
+
+                const siteToRelieversMap = new Map();
+                Object.entries(breakReliefs).forEach(([relieverName, relief]) => {
+                    relief.schedule.forEach(item => {
+                        if (!item.isBreak) {
+                            const site = findSiteByAddress(item.locationName);
+                            if (site) {
+                                if (!siteToRelieversMap.has(site.name)) {
+                                    siteToRelieversMap.set(site.name, { site: site, relievers: new Set() });
+                                }
+                                siteToRelieversMap.get(site.name).relievers.add(relieverName);
+                            }
+                        }
+                    });
+                });
+
+                const reliefBounds = [];
+                siteToRelieversMap.forEach(({ site, relievers }) => {
+                    const relieverList = Array.from(relievers);
+                    const color = relieverColors[relieverList[0]] || '#3388ff';
+                    const popupText = `Reliever: ${relieverList.join(', ')}`;
+
+                    const icon = createColoredIcon(color, { scale: 0.9 });
+                    const marker = L.marker([site.lat, site.lng], { icon: icon }).addTo(allSitesLayer);
+                    marker.bindPopup(`<b>${site.name}</b><br>${site.address}<br><small>${popupText}</small>`);
+                    reliefBounds.push([site.lat, site.lng]);
+                });
+
+                if (reliefBounds.length > 0) {
+                    map.fitBounds(reliefBounds, { padding: [50, 50] });
+                }
+            }
+
             function displayRoute(employeeName) {
                 routeLayer.clearLayers();
                 allSitesLayer.clearLayers();
-
+                managerLegend.style.opacity = 0;
+                reliefLegend.classList.add('hidden');
+                
                 const relief = breakReliefs[employeeName];
+
                 if (!relief) return;
 
                 const routePoints = [];
@@ -347,55 +448,56 @@
                 const scheduleContainer = document.getElementById('route-schedule');
                 scheduleContainer.innerHTML = '';
                 
-                relief.schedule.forEach(item => {
+                relief.schedule.forEach((item, index) => {
                     const scheduleItemDiv = document.createElement('div');
+                    scheduleItemDiv.className = 'animate-slide-in-up';
+                    scheduleItemDiv.style.animationDelay = `${index * 50}ms`;
                     
                     if (item.isBreak) {
-                        scheduleItemDiv.className = 'p-3 rounded-lg bg-yellow-900/50 border border-yellow-800';
+                        scheduleItemDiv.classList.add('p-3', 'rounded-lg', 'bg-gray-800/50');
                         scheduleItemDiv.innerHTML = `
-                            <div class="font-semibold text-yellow-300">${employeeName}'s ${item.locationName}</div>
-                            <div class="text-sm text-yellow-400">${item.startTime} - ${item.endTime}</div>
+                            <div class="text-amber-400">${item.locationName}</div>
+                            ${item.startTime ? `<div class="text-sm text-gray-400">${item.startTime} - ${item.endTime}</div>` : ''}
                         `;
                     } else {
-                        scheduleItemDiv.className = 'p-3 rounded-lg bg-gray-700 border border-gray-600';
+                        scheduleItemDiv.classList.add('p-3', 'rounded-lg', 'bg-gray-700/50', 'border', 'border-gray-600/50');
                         const site = findSiteByAddress(item.locationName);
                         if (site) {
                             scheduleItemDiv.innerHTML = `
-                                <div class="font-semibold text-white">${stopCounter}. ${site.name}</div>
-                                <div class="text-sm text-gray-400">${item.startTime} - ${item.endTime}</div>
-                                <div class="text-xs text-gray-500">${site.address}</div>
+                                <div class="text-white"><span class="text-gray-400">${stopCounter}.</span> ${site.name}</div>
+                                <div class="text-sm text-gray-400 pl-4">${item.startTime} - ${item.endTime}</div>
+                                <div class="text-xs text-gray-500 pl-4">${site.address}</div>
                             `;
                             routePoints.push([site.lat, site.lng]);
                             
                             const key = `${site.lat},${site.lng}`;
                             if (!aggregatedStops[key]) {
-                                aggregatedStops[key] = {
-                                    lat: site.lat,
-                                    lng: site.lng,
-                                    name: site.name,
-                                    stopNums: []
-                                };
+                                aggregatedStops[key] = { lat: site.lat, lng: site.lng, name: site.name, stopNums: [] };
                             }
                             aggregatedStops[key].stopNums.push(stopCounter);
                         } else {
                              scheduleItemDiv.innerHTML = `
-                                <div class="font-semibold text-red-400">${stopCounter}. Location not found</div>
-                                <div class="text-sm text-red-500">${item.locationName}</div>
-                            `;
+                                <div class="text-red-400">${stopCounter}. Location not found</div>
+                                <div class="text-sm text-red-500">${item.locationName}</div>`;
                         }
-                        // Increment counter for every non-break stop, regardless of whether it was found
                         stopCounter++;
                     }
                     scheduleContainer.appendChild(scheduleItemDiv);
                 });
                 
-                if (routePoints.length > 0) {
-                    L.polyline(routePoints, { color: 'rgba(59, 130, 246, 0.8)', weight: 5 }).addTo(routeLayer);
+                if (routePoints.length > 1) {
+                    L.polyline(routePoints, { color: relieverColors[employeeName] || '#3388ff', weight: 4, opacity: 0.8 }).addTo(routeLayer);
                 }
 
                 Object.values(aggregatedStops).forEach(stop => {
                     const stopNumbersText = stop.stopNums.join(',');
-                    const iconWidth = 10 * stopNumbersText.length + 18; // Dynamically calculate width
+                    const iconWidth = 10 * stopNumbersText.length + 20;
+                    
+                    const siteColor = relieverColors[employeeName];
+                    if (siteColor) {
+                        const bgIcon = createColoredIcon(siteColor, { opacity: 0.8, scale: 1.1 });
+                        L.marker([stop.lat, stop.lng], { icon: bgIcon }).addTo(routeLayer);
+                    }
 
                     const numberIcon = L.divIcon({ 
                         className: 'route-marker-icon', 
@@ -403,7 +505,7 @@
                         iconSize: [iconWidth, 28], 
                         iconAnchor: [iconWidth / 2, 14] 
                     });
-                    L.marker([stop.lat, stop.lng], { icon: numberIcon })
+                    L.marker([stop.lat, stop.lng], { icon: numberIcon, zIndexOffset: 1000 })
                         .bindPopup(`<b>Stops ${stopNumbersText}: ${stop.name}</b>`)
                         .addTo(routeLayer);
                 });
@@ -413,103 +515,69 @@
                 }
 
                 document.getElementById('route-employee-name').textContent = `${employeeName}'s Route`;
-                // Animate the sections
-                const routeInfoSection = document.getElementById('route-info-section');
-                routeInfoSection.classList.remove('hidden');
-                routeInfoSection.classList.add('animate-pop-in');
-
-                document.getElementById('relief-section').classList.add('hidden');
-                document.getElementById('manager-legend-container').classList.add('hidden');
+                
+                switchView(routeInfoSection);
             }
             
             // Populate Manager Legend
             const legendContainer = document.getElementById('manager-legend');
-            Object.keys(managerColors).sort().forEach(name => {
-                const color = managerColors[name];
+            Object.keys(managerColors).sort().forEach((name, index) => {
                 const legendItem = document.createElement('div');
-                legendItem.className = 'flex items-center space-x-2';
-                
-                const dot = document.createElement('div');
-                dot.className = 'w-3 h-3 rounded-full flex-shrink-0';
-                dot.style.backgroundColor = color;
-                
-                const nameSpan = document.createElement('span');
-                nameSpan.className = 'text-xs text-gray-300';
-                nameSpan.textContent = name;
-                
-                legendItem.appendChild(dot);
-                legendItem.appendChild(nameSpan);
+                legendItem.className = 'flex items-center space-x-3 animate-slide-in-up';
+                legendItem.style.animationDelay = `${index * 50}ms`;
+                legendItem.innerHTML = `
+                    <div class="w-4 h-4 rounded-full flex-shrink-0" style="background-color: ${managerColors[name]};"></div>
+                    <span class="text-sm text-gray-200">${name}</span>`;
                 legendContainer.appendChild(legendItem);
             });
 
             // Populate relief employee list
             const employeeListContainer = document.getElementById('relief-employee-list');
-            Object.keys(breakReliefs).forEach(name => {
+            Object.keys(breakReliefs).sort().forEach((name, index) => {
                 const button = document.createElement('button');
                 button.textContent = name;
-                button.className = 'w-full text-left p-3 bg-gray-700 text-gray-100 border border-gray-600 rounded-lg shadow-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-all duration-150 transform active:scale-95';
+                button.className = 'w-full text-left p-3 bg-white text-gray-900 rounded-lg hover:bg-gray-200 transition-colors duration-200 transform hover:translate-x-1 animate-slide-in-up';
+                button.style.animationDelay = `${index * 50}ms`;
                 button.onclick = () => displayRoute(name);
                 employeeListContainer.appendChild(button);
             });
 
-            document.getElementById('clear-route-btn').addEventListener('click', () => {
-                routeLayer.clearLayers();
+            // UI Views & State
+            const initialView = document.getElementById('initial-view');
+            const reliefListView = document.getElementById('relief-list-view');
+            const routeInfoSection = document.getElementById('route-info-section');
+            const allViews = [initialView, reliefListView, routeInfoSection];
+
+            function switchView(targetView) {
+                allViews.forEach(view => {
+                    if (view !== targetView) {
+                        view.classList.add('hidden');
+                    }
+                });
+                targetView.classList.remove('hidden');
+            }
+            
+            // Event Listeners
+            document.getElementById('show-relief-routes-btn').addEventListener('click', () => {
+                switchView(reliefListView);
+                displayOnlyReliefSites();
+            });
+            document.getElementById('back-to-initial-btn').addEventListener('click', () => {
+                switchView(initialView);
                 displayAllSites();
                 map.setView([37.7749, -122.4194], 13);
-                
-                const routeInfoSection = document.getElementById('route-info-section');
-                routeInfoSection.classList.add('hidden');
-                routeInfoSection.classList.remove('animate-pop-in');
-                
-                const reliefSection = document.getElementById('relief-section');
-                reliefSection.classList.remove('hidden');
-                reliefSection.classList.add('animate-pop-in');
-
-                const managerLegendContainer = document.getElementById('manager-legend-container');
-                managerLegendContainer.classList.remove('hidden');
-                managerLegendContainer.classList.add('animate-pop-in');
+            });
+            document.getElementById('back-to-relief-list-btn').addEventListener('click', () => {
+                switchView(reliefListView);
+                displayOnlyReliefSites();
             });
             
-            // Initial animation for the sidebar sections
-            document.getElementById('manager-legend-container').classList.add('animate-pop-in');
-            document.getElementById('relief-section').classList.add('animate-pop-in');
+            // Initial State
             displayAllSites();
-
             mapInitialized = true;
         }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            // --- Access Code Logic --- //
-            const correctAccessCode = '91965';
-            const accessPrompt = document.getElementById('access-prompt');
-            const appContainer = document.getElementById('app-container');
-            const accessInput = document.getElementById('access-code-input');
-            const accessSubmit = document.getElementById('access-submit-btn');
-            const accessError = document.getElementById('access-error');
-
-            function checkAccessCode() {
-                if (accessInput.value === correctAccessCode) {
-                    accessPrompt.style.display = 'none';
-                    appContainer.classList.remove('hidden');
-                    initializeMapApplication(); // Initialize the map after the container is visible
-                } else {
-                    accessError.textContent = 'Invalid access code.';
-                    accessInput.classList.add('border-red-500'); // Highlight error
-                    setTimeout(() => {
-                        accessError.textContent = '';
-                        accessInput.classList.remove('border-red-500');
-                    }, 2000);
-                    accessInput.value = '';
-                }
-            }
-
-            accessSubmit.addEventListener('click', checkAccessCode);
-            accessInput.addEventListener('keyup', (event) => {
-                if (event.key === 'Enter') {
-                    checkAccessCode();
-                }
-            });
-        });
+        document.addEventListener('DOMContentLoaded', initializeMapApplication);
     </script>
 </body>
 </html>
